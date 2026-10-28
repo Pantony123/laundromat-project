@@ -63,7 +63,14 @@
             </a>
             <nav class="flex items-center gap-2">
                 <a href="/waitlist" class="text-sm text-gray-600 hover:text-primary-600 px-3 py-1.5 rounded-lg hover:bg-primary-50">Waitlist</a>
-                <a href="/admin" class="text-sm text-gray-600 hover:text-primary-600 px-3 py-1.5 rounded-lg hover:bg-primary-50">Staff</a>
+                {% if user and user.role in ['admin', 'staff'] %}
+                <a href="/admin" class="text-sm text-gray-600 hover:text-primary-600 px-3 py-1.5 rounded-lg hover:bg-primary-50">Staff Dashboard</a>
+                <form method="post" action="/logout" class="inline">
+                    <button type="submit" class="text-sm text-gray-600 hover:text-danger-600 px-3 py-1.5 rounded-lg hover:bg-danger-50">Logout</button>
+                </form>
+                {% else %}
+                <a href="/login" class="text-sm text-primary-600 hover:text-primary-700 px-3 py-1.5 rounded-lg hover:bg-primary-50 font-medium">Staff Login</a>
+                {% endif %}
             </nav>
         </div>
     </header>

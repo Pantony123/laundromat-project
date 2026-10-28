@@ -91,6 +91,17 @@ class Database:
         if self.is_postgres:
             # PostgreSQL schema
             schema = """
+            CREATE TABLE IF NOT EXISTS users (
+                id VARCHAR(50) PRIMARY KEY,
+                username VARCHAR(50) UNIQUE NOT NULL,
+                email VARCHAR(100) UNIQUE,
+                password_hash VARCHAR(255) NOT NULL,
+                role VARCHAR(20) NOT NULL DEFAULT 'customer',
+                full_name VARCHAR(100),
+                created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                last_login TIMESTAMP,
+                is_active BOOL NOT NULL DEFAULT TRUE
+            );
             CREATE TABLE IF NOT EXISTS machines (
                 id VARCHAR(20) PRIMARY KEY,
                 type VARCHAR(10) NOT NULL,
@@ -119,6 +130,18 @@ class Database:
                 notified BOOL NOT NULL DEFAULT FALSE,
                 notified_at TIMESTAMP
             );
+            CREATE TABLE IF NOT EXISTS sessions (
+                id VARCHAR(64) PRIMARY KEY,
+                user_id VARCHAR(50) NOT NULL REFERENCES users(id),
+                created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                expires_at TIMESTAMP NOT NULL,
+                ip_address VARCHAR(45),
+                user_agent TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+            CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+            CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+            CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
             CREATE INDEX IF NOT EXISTS idx_bookings_machine ON bookings(machine_id);
             CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
             CREATE INDEX IF NOT EXISTS idx_waitlist_type ON waitlist(machine_type);
@@ -126,6 +149,17 @@ class Database:
         else:
             # SQLite schema
             schema = """
+            CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                username TEXT UNIQUE NOT NULL,
+                email TEXT UNIQUE,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'customer',
+                full_name TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                last_login TEXT,
+                is_active INT NOT NULL DEFAULT 1
+            );
             CREATE TABLE IF NOT EXISTS machines (
                 id TEXT PRIMARY KEY,
                 type TEXT NOT NULL,
@@ -154,6 +188,18 @@ class Database:
                 notified INT NOT NULL DEFAULT 0,
                 notified_at TEXT
             );
+            CREATE TABLE IF NOT EXISTS sessions (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                expires_at TEXT NOT NULL,
+                ip_address TEXT,
+                user_agent TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+            CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+            CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+            CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
             CREATE INDEX IF NOT EXISTS idx_bookings_machine ON bookings(machine_id);
             CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
             CREATE INDEX IF NOT EXISTS idx_waitlist_type ON waitlist(machine_type);
@@ -162,6 +208,7 @@ class Database:
         with self.conn() as conn:
             conn.executescript(schema)
             self._seed_machines(conn)
+            self._seed_admin_user(conn)
 
     def _seed_machines(self, conn):
         """Insert default machines if table is empty."""
@@ -179,6 +226,24 @@ class Database:
             if self.is_postgres:
                 conn.commit()
 
+    def _seed_admin_user(self, conn):
+        """Create default admin user if none exists."""
+        count = conn.execute("SELECT COUNT(*) FROM users WHERE role = 'admin'").fetchone()[0]
+        if count == 0:
+            # Default admin: username=admin, password=admin123 (CHANGE IN PRODUCTION!)
+            import bcrypt
+            admin_id = f"U{datetime.now().strftime('%Y%m%d%H%M%S')}"
+            password_hash = bcrypt.hashpw("admin123".encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            now_iso = datetime.now().isoformat()
+            conn.execute(
+                """INSERT INTO users (id, username, email, password_hash, role, full_name, created_at, is_active)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (admin_id, "admin", "admin@laundromat.local", password_hash, "admin", "System Administrator", now_iso, 1)
+            )
+            if self.is_postgres:
+                conn.commit()
+            print("[WARNING] Created default admin user: admin / admin123 - CHANGE THIS PASSWORD IMMEDIATELY!")
+
     def close(self):
         """Close all connections."""
         if self.is_postgres and self._pg_pool:
@@ -187,6 +252,7 @@ class Database:
 
 # Global instance (initialized on first import)
 _db: Optional[Database] = None
+
 
 def get_db() -> Database:
     """Get the global database instance."""

@@ -1,19 +1,23 @@
 #!/usr/bin/env python3
 """
-Customer-Facing Laundromat Booking Portal
+Customer-Facing Laundromat Booking Portal with Staff Authentication
 Clean, mobile-first FastAPI web application.
 Run: uvicorn customer_portal:app --reload --port 8000
 """
 
+import secrets
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, Request, Form, HTTPException, Query
+from fastapi import FastAPI, Request, Form, HTTPException, Query, Depends, Cookie, Response
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, EmailStr
+import bcrypt
+from jose import jwt, JWTError
 
 from laundromat_booking import (
     LaundromatBookingSystem,
@@ -22,6 +26,12 @@ from laundromat_booking import (
     BookingStatus,
     create_twilio_sender,
 )
+
+# ===== AUTH CONFIG =====
+SECRET_KEY = "laundromat-secret-change-in-production-please-use-env-var"
+ALGORITHM = "HS256"
+SESSION_EXPIRE_MINUTES = 60 * 24 * 7  # 7 days
+ADMIN_ROLES = {"admin", "staff"}
 
 # ===== CONFIG =====
 BASE_URL = "http://localhost:8000"  # Change for production
@@ -35,7 +45,7 @@ system = LaundromatBookingSystem(
 )
 
 # ===== FASTAPI APP =====
-app = FastAPI(title="Laundromat Booking", version="2.0.0")
+app = FastAPI(title="Laundromat Booking", version="2.1.0")
 
 # Static files & templates
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -57,6 +67,66 @@ class WaitlistRequest(BaseModel):
 class CheckInRequest(BaseModel):
     booking_id: str
     code: str
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class CreateStaffRequest(BaseModel):
+    username: str
+    password: str
+    full_name: str
+    email: Optional[EmailStr] = None
+    role: str = "staff"  # "admin" or "staff"
+
+# ===== AUTH HELPERS =====
+def get_db():
+    from database import get_db
+    return get_db()
+
+def hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+def verify_password(password: str, password_hash: str) -> bool:
+    return bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8'))
+
+def create_session_token(user_id: str) -> str:
+    expire = datetime.utcnow() + timedelta(minutes=SESSION_EXPIRE_MINUTES)
+    payload = {"sub": user_id, "exp": expire, "iat": datetime.utcnow()}
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+def decode_session_token(token: str) -> Optional[str]:
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload.get("sub")
+    except JWTError:
+        return None
+
+def get_current_user(request: Request, session: Optional[str] = Cookie(None)) -> Optional[dict]:
+    """Get current user from session cookie."""
+    if not session:
+        return None
+    user_id = decode_session_token(session)
+    if not user_id:
+        return None
+    db = get_db()
+    row = db.fetchone("SELECT id, username, email, role, full_name, is_active FROM users WHERE id = ?", (user_id,))
+    if not row or not row["is_active"]:
+        return None
+    return dict(row)
+
+def require_admin(request: Request, session: Optional[str] = Cookie(None)) -> dict:
+    """Dependency that requires admin/staff role."""
+    user = get_current_user(request, session)
+    if not user:
+        raise HTTPException(401, "Authentication required")
+    if user["role"] not in ADMIN_ROLES:
+        raise HTTPException(403, "Admin access required")
+    return user
+
+def require_any_auth(request: Request, session: Optional[str] = Cookie(None)) -> Optional[dict]:
+    """Dependency that returns user if authenticated, None otherwise."""
+    return get_current_user(request, session)
 
 # ===== HELPER FUNCTIONS =====
 def get_available_machines(mtype: Optional[MachineType] = None):
@@ -93,7 +163,7 @@ def format_datetime_input(dt: datetime) -> str:
 # ===== ROUTES =====
 
 @app.get("/", response_class=HTMLResponse)
-async def home(request: Request):
+async def home(request: Request, user: Optional[dict] = Depends(require_any_auth)):
     """Landing page - shows available machines."""
     washers = get_available_machines(MachineType.WASHER)
     dryers = get_available_machines(MachineType.DRYER)
@@ -104,10 +174,11 @@ async def home(request: Request):
         "stats": stats,
         "now": format_datetime_input(datetime.now()),
         "soon": format_datetime_input(datetime.now() + timedelta(hours=2)),
+        "user": user,
     })
 
 @app.get("/book/{machine_id}", response_class=HTMLResponse)
-async def book_page(request: Request, machine_id: str):
+async def book_page(request: Request, machine_id: str, user: Optional[dict] = Depends(require_any_auth)):
     """Booking form for a specific machine."""
     machine = system.get_machine(machine_id)
     if not machine:
@@ -131,6 +202,7 @@ async def book_page(request: Request, machine_id: str):
         ],
         "default_start": format_datetime_input(now),
         "default_end": format_datetime_input(now + timedelta(hours=1)),
+        "user": user,
     })
 
 @app.post("/book/{machine_id}")
@@ -164,7 +236,7 @@ async def create_booking(
     return RedirectResponse(url=f"/confirm/{booking.id}", status_code=303)
 
 @app.get("/confirm/{booking_id}", response_class=HTMLResponse)
-async def booking_confirmation(request: Request, booking_id: str):
+async def booking_confirmation(request: Request, booking_id: str, user: Optional[dict] = Depends(require_any_auth)):
     """Booking confirmation page with check-in QR."""
     booking = system.get_booking(booking_id)
     if not booking:
@@ -184,10 +256,11 @@ async def booking_confirmation(request: Request, booking_id: str):
             "qr_base64": system.get_booking_qr_base64(booking_id),
             "status": booking.status,
         },
+        "user": user,
     })
 
 @app.get("/status/{booking_id}", response_class=HTMLResponse)
-async def booking_status(request: Request, booking_id: str):
+async def booking_status(request: Request, booking_id: str, user: Optional[dict] = Depends(require_any_auth)):
     """Real-time booking status page (for customers to check)."""
     booking = system.get_booking(booking_id)
     if not booking:
@@ -215,6 +288,7 @@ async def booking_status(request: Request, booking_id: str):
             "time_until": time_until,
             "qr_base64": system.get_booking_qr_base64(booking_id),
         },
+        "user": user,
     })
 
 @app.post("/checkin/{booking_id}")
@@ -226,10 +300,11 @@ async def checkin_booking(booking_id: str, code: str = Form(...)):
     return RedirectResponse(url=f"/status/{booking_id}", status_code=303)
 
 @app.get("/waitlist", response_class=HTMLResponse)
-async def waitlist_page(request: Request):
+async def waitlist_page(request: Request, user: Optional[dict] = Depends(require_any_auth)):
     """Join waitlist page."""
     return templates.TemplateResponse(request, "waitlist.html", {
         "machine_types": ["washer", "dryer"],
+        "user": user,
     })
 
 @app.post("/waitlist")
@@ -250,7 +325,7 @@ async def join_waitlist(
     return RedirectResponse(url=f"/waitlist/confirm/{entry.id}", status_code=303)
 
 @app.get("/waitlist/confirm/{entry_id}", response_class=HTMLResponse)
-async def waitlist_confirm(request: Request, entry_id: str):
+async def waitlist_confirm(request: Request, entry_id: str, user: Optional[dict] = Depends(require_any_auth)):
     """Waitlist confirmation."""
     entry = system.get_waitlist_entry(entry_id)
     if not entry:
@@ -258,6 +333,7 @@ async def waitlist_confirm(request: Request, entry_id: str):
     return templates.TemplateResponse(request, "waitlist_confirm.html", {
         "entry": entry,
         "position": len([e for e in system.get_waitlist(entry.machine_type) if e.created_at <= entry.created_at]),
+        "user": user,
     })
 
 @app.delete("/api/waitlist/{entry_id}")
@@ -298,10 +374,77 @@ async def api_booking_status(booking_id: str):
         "end": booking.end_dt.isoformat(),
     }
 
-# ===== ADMIN ROUTES =====
+# ===== AUTH ROUTES =====
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request, user: Optional[dict] = Depends(require_any_auth)):
+    """Login page."""
+    if user:
+        return RedirectResponse(url="/admin", status_code=303)
+    return templates.TemplateResponse(request, "login.html", {"user": user, "error": None})
+
+@app.post("/login")
+async def login(
+    request: Request,
+    response: Response,
+    username: str = Form(...),
+    password: str = Form(...),
+):
+    """Process login."""
+    db = get_db()
+    row = db.fetchone("SELECT * FROM users WHERE username = ?", (username,))
+    if not row or not row["is_active"]:
+        return templates.TemplateResponse(request, "login.html", {
+            "user": None, "error": "Invalid username or password"
+        }, status_code=401)
+
+    if not verify_password(password, row["password_hash"]):
+        return templates.TemplateResponse(request, "login.html", {
+            "user": None, "error": "Invalid username or password"
+        }, status_code=401)
+
+    # Create session
+    token = create_session_token(row["id"])
+
+    # Update last login
+    db.execute("UPDATE users SET last_login = ? WHERE id = ?", (datetime.now().isoformat(), row["id"]))
+
+    # Store session in database
+    session_id = secrets.token_urlsafe(32)
+    expires_at = datetime.utcnow() + timedelta(minutes=SESSION_EXPIRE_MINUTES)
+    db.execute(
+        "INSERT INTO sessions (id, user_id, expires_at) VALUES (?, ?, ?)",
+        (session_id, row["id"], expires_at.isoformat())
+    )
+
+    # Set cookie
+    response = RedirectResponse(url="/admin", status_code=303)
+    response.set_cookie(
+        key="session",
+        value=token,
+        httponly=True,
+        secure=False,  # Set to True in production with HTTPS
+        samesite="lax",
+        max_age=SESSION_EXPIRE_MINUTES * 60,
+    )
+    return response
+
+@app.post("/logout")
+async def logout(response: Response, session: Optional[str] = Cookie(None)):
+    """Logout user."""
+    if session:
+        user_id = decode_session_token(session)
+        if user_id:
+            db = get_db()
+            db.execute("DELETE FROM sessions WHERE user_id = ?", (user_id,))
+
+    response = RedirectResponse(url="/", status_code=303)
+    response.delete_cookie("session")
+    return response
+
+# ===== ADMIN ROUTES (PROTECTED) =====
 @app.get("/admin", response_class=HTMLResponse)
-async def admin_dashboard(request: Request):
-    """Staff admin dashboard."""
+async def admin_dashboard(request: Request, user: dict = Depends(require_admin)):
+    """Staff admin dashboard - requires authentication."""
     stats = system.get_stats()
     machines = system.list_machines()
     bookings_today = system.list_bookings(date=datetime.now())
@@ -330,24 +473,178 @@ async def admin_dashboard(request: Request):
             {"id": w.id, "name": w.customer_name, "phone": w.customer_phone, "type": w.machine_type.value}
             for w in waitlist
         ],
+        "user": user,
     })
 
+@app.get("/admin/staff", response_class=HTMLResponse)
+async def admin_staff(request: Request, user: dict = Depends(require_admin)):
+    """Staff management page - admin only."""
+    if user["role"] != "admin":
+        raise HTTPException(403, "Admin only")
+
+    db = get_db()
+    staff = db.fetchall(
+        "SELECT id, username, email, role, full_name, created_at, last_login, is_active FROM users WHERE role IN ('admin', 'staff') ORDER BY created_at DESC"
+    )
+
+    return templates.TemplateResponse(request, "staff.html", {
+        "staff": [dict(s) for s in staff],
+        "user": user,
+    })
+
+@app.post("/admin/staff/create")
+async def create_staff(
+    request: Request,
+    username: str = Form(...),
+    password: str = Form(...),
+    full_name: str = Form(...),
+    email: str = Form(""),
+    role: str = Form("staff"),
+    user: dict = Depends(require_admin)
+):
+    """Create new staff member - admin only."""
+    if user["role"] != "admin":
+        raise HTTPException(403, "Admin only")
+
+    if role not in ("admin", "staff"):
+        raise HTTPException(400, "Invalid role")
+
+    db = get_db()
+    # Check if username exists
+    existing = db.fetchone("SELECT id FROM users WHERE username = ?", (username,))
+    if existing:
+        raise HTTPException(400, "Username already exists")
+
+    if email:
+        existing = db.fetchone("SELECT id FROM users WHERE email = ?", (email,))
+        if existing:
+            raise HTTPException(400, "Email already exists")
+
+    # Create user
+    user_id = f"U{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    password_hash = hash_password(password)
+    now_iso = datetime.now().isoformat()
+    db.execute(
+        """INSERT INTO users (id, username, email, password_hash, role, full_name, created_at, is_active)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (user_id, username, email or None, password_hash, role, full_name, now_iso, 1)
+    )
+
+    return RedirectResponse(url="/admin/staff", status_code=303)
+
+@app.post("/admin/staff/{staff_id}/toggle")
+async def toggle_staff(staff_id: str, user: dict = Depends(require_admin)):
+    """Toggle staff active status - admin only."""
+    if user["role"] != "admin":
+        raise HTTPException(403, "Admin only")
+
+    if staff_id == user["id"]:
+        raise HTTPException(400, "Cannot deactivate yourself")
+
+    db = get_db()
+    row = db.fetchone("SELECT is_active FROM users WHERE id = ?", (staff_id,))
+    if not row:
+        raise HTTPException(404, "Staff not found")
+
+    new_status = 0 if row["is_active"] else 1
+    db.execute("UPDATE users SET is_active = ? WHERE id = ?", (new_status, staff_id))
+
+    # Invalidate sessions if deactivating
+    if new_status == 0:
+        db.execute("DELETE FROM sessions WHERE user_id = ?", (staff_id,))
+
+    return RedirectResponse(url="/admin/staff", status_code=303)
+
+@app.post("/admin/staff/{staff_id}/password")
+async def change_staff_password(
+    staff_id: str,
+    new_password: str = Form(...),
+    user: dict = Depends(require_admin)
+):
+    """Change staff password - admin only."""
+    if user["role"] != "admin":
+        raise HTTPException(403, "Admin only")
+
+    if len(new_password) < 8:
+        raise HTTPException(400, "Password must be at least 8 characters")
+
+    db = get_db()
+    row = db.fetchone("SELECT id FROM users WHERE id = ?", (staff_id,))
+    if not row:
+        raise HTTPException(404, "Staff not found")
+
+    password_hash = hash_password(new_password)
+    db.execute("UPDATE users SET password_hash = ? WHERE id = ?", (password_hash, staff_id))
+
+    # Invalidate all sessions for this user (force re-login)
+    db.execute("DELETE FROM sessions WHERE user_id = ?", (staff_id,))
+
+    return RedirectResponse(url="/admin/staff", status_code=303)
+
+# ===== SELF-SERVICE PASSWORD CHANGE =====
+@app.get("/admin/password", response_class=HTMLResponse)
+async def change_my_password_page(request: Request, user: dict = Depends(require_admin)):
+    """Show change password page for current user."""
+    return templates.TemplateResponse(request, "change_password.html", {"user": user})
+
+@app.post("/admin/password")
+async def change_my_password(
+    request: Request,
+    current_password: str = Form(...),
+    new_password: str = Form(...),
+    confirm_password: str = Form(...),
+    user: dict = Depends(require_admin)
+):
+    """Change current user's password."""
+    db = get_db()
+    row = db.fetchone("SELECT password_hash FROM users WHERE id = ?", (user["id"],))
+    if not row or not verify_password(current_password, row["password_hash"]):
+        return templates.TemplateResponse(request, "change_password.html", {
+            "user": user, "error": "Current password is incorrect"
+        }, status_code=400)
+
+    if new_password != confirm_password:
+        return templates.TemplateResponse(request, "change_password.html", {
+            "user": user, "error": "New passwords do not match"
+        }, status_code=400)
+
+    if len(new_password) < 8:
+        return templates.TemplateResponse(request, "change_password.html", {
+            "user": user, "error": "Password must be at least 8 characters"
+        }, status_code=400)
+
+    if verify_password(new_password, row["password_hash"]):
+        return templates.TemplateResponse(request, "change_password.html", {
+            "user": user, "error": "New password must be different from current"
+        }, status_code=400)
+
+    password_hash = hash_password(new_password)
+    db.execute("UPDATE users SET password_hash = ? WHERE id = ?", (password_hash, user["id"]))
+
+    # Invalidate all sessions (force re-login)
+    db.execute("DELETE FROM sessions WHERE user_id = ?", (user["id"],))
+
+    # Redirect to login with success message
+    response = RedirectResponse(url="/login?password_changed=1", status_code=303)
+    response.delete_cookie("session")
+    return response
+
 @app.post("/admin/machine/{machine_id}/maintenance")
-async def admin_toggle_maintenance(machine_id: str, maintenance: bool = Form(...)):
+async def admin_toggle_maintenance(machine_id: str, maintenance: bool = Form(...), user: dict = Depends(require_admin)):
     success = system.set_maintenance(machine_id, maintenance)
     if not success:
         raise HTTPException(400, "Cannot set maintenance (machine in use)")
     return RedirectResponse(url="/admin", status_code=303)
 
 @app.post("/admin/booking/{booking_id}/complete")
-async def admin_complete_booking(booking_id: str):
+async def admin_complete_booking(booking_id: str, user: dict = Depends(require_admin)):
     success = system.complete_booking(booking_id)
     if not success:
         raise HTTPException(400, "Cannot complete")
     return RedirectResponse(url="/admin", status_code=303)
 
 @app.post("/admin/booking/{booking_id}/cancel")
-async def admin_cancel_booking(booking_id: str):
+async def admin_cancel_booking(booking_id: str, user: dict = Depends(require_admin)):
     success = system.cancel_booking(booking_id)
     if not success:
         raise HTTPException(400, "Cannot cancel")
@@ -357,7 +654,6 @@ async def admin_cancel_booking(booking_id: str):
 @app.get("/health")
 async def health():
     return {"status": "ok", "timestamp": datetime.now().isoformat()}
-
 
 # ===== ERROR HANDLERS (friendly pages instead of black text) =====
 @app.exception_handler(404)
@@ -382,31 +678,38 @@ async def internal_error_handler(request: Request, exc: Exception):
 async def http_exception_handler(request: Request, exc: HTTPException):
     if exc.status_code == 404:
         return await not_found_handler(request, exc)
+    if exc.status_code == 401:
+        return RedirectResponse(url="/login", status_code=303)
+    if exc.status_code == 403:
+        return templates.TemplateResponse(request, "error.html", {
+            "status_code": 403,
+            "title": "Access Denied",
+            "message": exc.detail or "You don't have permission to access this page.",
+        }, status_code=403)
     return templates.TemplateResponse(request, "error.html", {
         "status_code": exc.status_code,
         "title": "Error",
         "message": exc.detail,
     }, status_code=exc.status_code)
 
-
 # ===== CATCH-ALL 404 (must be last route) =====
 @app.get("/{path:path}")
 async def catch_all(request: Request, path: str):
     raise HTTPException(404, "Page not found")
 
-
 # ===== STARTUP / SHUTDOWN =====
 @app.on_event("startup")
 async def startup():
-    print(f"🚀 Laundromat Portal started at {BASE_URL}")
-    print(f"   Admin: {BASE_URL}/admin")
+    print(f"[START] Laundromat Portal started at {BASE_URL}")
+    print(f"   Customer: {BASE_URL}/")
+    print(f"   Admin: {BASE_URL}/admin (login required)")
+    print(f"   Login: {BASE_URL}/login")
     print(f"   QR codes: {Path('qr_codes').absolute()}")
 
 @app.on_event("shutdown")
 async def shutdown():
     system.stop_auto_complete()
-    print("👋 Shutdown complete")
-
+    print("[END] Shutdown complete")
 
 if __name__ == "__main__":
     import uvicorn

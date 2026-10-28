@@ -1,0 +1,109 @@
+{
+  "machines": [
+    {
+      "id": "W1",
+      "type": "washer",
+      "status": "in_use",
+      "current_booking": "B20261028133117",
+      "location_notes": "Washer row, position 1"
+    },
+    {
+      "id": "D1",
+      "type": "dryer",
+      "status": "available",
+      "current_booking": null,
+      "location_notes": "Dryer row, position 1"
+    },
+    {
+      "id": "W2",
+      "type": "washer",
+      "status": "available",
+      "current_booking": null,
+      "location_notes": "Washer row, position 2"
+    },
+    {
+      "id": "D2",
+      "type": "dryer",
+      "status": "available",
+      "current_booking": null,
+      "location_notes": "Dryer row, position 2"
+    },
+    {
+      "id": "W3",
+      "type": "washer",
+      "status": "available",
+      "current_booking": null,
+      "location_notes": "Washer row, position 3"
+    },
+    {
+      "id": "D3",
+      "type": "dryer",
+      "status": "available",
+      "current_booking": null,
+      "location_notes": "Dryer row, position 3"
+    },
+    {
+      "id": "W4",
+      "type": "washer",
+      "status": "available",
+      "current_booking": null,
+      "location_notes": "Washer row, position 4"
+    },
+    {
+      "id": "D4",
+      "type": "dryer",
+      "status": "available",
+      "current_booking": null,
+      "location_notes": "Dryer row, position 4"
+    }
+  ],
+  "bookings": [
+    {
+      "id": "B20261028132344",
+      "machine_id": "W1",
+      "customer_name": "Test User",
+      "customer_phone": "555-1234",
+      "start_time": "2026-10-28T13:30:00",
+      "duration_minutes": 45,
+      "created_at": "2026-10-28T13:23:44.758243",
+      "status": "cancelled",
+      "completed_at": null,
+      "check_in_code": "9117"
+    },
+    {
+      "id": "B20261028132426",
+      "machine_id": "W2",
+      "customer_name": "Test User",
+      "customer_phone": "555-1234",
+      "start_time": "2026-10-28T13:54:25",
+      "duration_minutes": 45,
+      "created_at": "2026-10-28T13:24:26.210890",
+      "status": "completed",
+      "completed_at": "2026-10-28T13:26:25.074001",
+      "check_in_code": "7494"
+    },
+    {
+      "id": "B20261028133117",
+      "machine_id": "W1",
+      "customer_name": "efef",
+      "customer_phone": "0485725273",
+      "start_time": "2026-10-28T13:32:00",
+      "duration_minutes": 45,
+      "created_at": "2026-10-28T13:31:17.101601",
+      "status": "in_progress",
+      "completed_at": null,
+      "check_in_code": "7320"
+    }
+  ],
+  "waitlist": [
+    {
+      "id": "WL20261028132538",
+      "customer_name": "Waitlist User",
+      "customer_phone": "555-9999",
+      "machine_type": "washer",
+      "created_at": "2026-10-28T13:25:38.764034",
+      "notified": false,
+      "notified_at": null
+    }
+  ]
+}

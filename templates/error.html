@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} - FreshSpin{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto text-center py-12">
+    <!-- Error icon -->
+    <div class="w-20 h-20 mx-auto mb-4 bg-danger-100 rounded-full flex items-center justify-center">
+        <svg class="w-10 h-10 text-danger-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+        </svg>
+    </div>
+
+    <h1 class="text-3xl font-bold text-gray-900 mb-2">{{ title }}</h1>
+    <p class="text-gray-500 mb-8">{{ message }}</p>
+
+    <!-- Status code badge (for debugging) -->
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-gray-100 text-gray-600 text-sm font-mono mb-6">
+        Status: <span class="font-bold">{{ status_code }}</span>
+    </div>
+
+    <div class="space-y-3">
+        <a href="/" class="block w-full py-3 bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700">
+            ← Back to Home
+        </a>
+        <a href="/admin" class="block w-full py-3 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50">
+            Staff Dashboard
+        </a>
+    </div>
+</div>
+{% endblock %}

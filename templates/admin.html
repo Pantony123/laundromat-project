@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% block title %}Admin Dashboard - FreshSpin{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto">
+    <!-- Header with stats -->
+    <div class="mb-6">
+        <div class="flex items-center justify-between mb-4">
+            <h1 class="text-xl font-bold text-gray-900">Staff Dashboard</h1>
+            <a href="/" class="text-sm text-primary-600 hover:underline">← Customer View</a>
+        </div>
+
+        <!-- Stats cards -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+            <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                <div class="text-xs text-gray-500">Available</div>
+                <div class="text-3xl font-bold text-success-600">{{ stats.available }}</div>
+            </div>
+            <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                <div class="text-xs text-gray-500">In Use</div>
+                <div class="text-3xl font-bold text-primary-600">{{ stats.in_use }}</div>
+            </div>
+            <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                <div class="text-xs text-gray-500">Booked</div>
+                <div class="text-3xl font-bold text-warning-600">{{ stats.booked }}</div>
+            </div>
+            <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                <div class="text-xs text-gray-500">Maintenance</div>
+                <div class="text-3xl font-bold text-gray-500">{{ stats.maintenance }}</div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+            <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                <div class="text-xs text-gray-500">Bookings Today</div>
+                <div class="text-3xl font-bold text-gray-900">{{ stats.bookings_today }}</div>
+            </div>
+            <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                <div class="text-xs text-gray-500">Active Now</div>
+                <div class="text-3xl font-bold text-primary-600">{{ stats.active_bookings }}</div>
+            </div>
+            <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                <div class="text-xs text-gray-500">Waitlist</div>
+                <div class="text-3xl font-bold text-blue-600">{{ stats.waitlist_count }}</div>
+            </div>
+            <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
+                <div class="text-xs text-gray-500">Total Machines</div>
+                <div class="text-3xl font-bold text-gray-600">{{ stats.total_machines }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Machines Grid -->
+    <section class="mb-8">
+        <h2 class="text-lg font-semibold mb-3 flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/>
+            </svg>
+            Machines
+        </h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            {% for m in machines %}
+            <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100
+                {% if m.status == 'available' %}border-l-4 border-success-500
+                {% elif m.status == 'in_use' %}border-l-4 border-primary-500
+                {% elif m.status == 'booked' %}border-l-4 border-warning-500
+                {% else %}border-l-4 border-gray-400{% endif %}">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="font-mono text-lg font-bold">{{ m.id }}</span>
+                    <span class="px-2 py-0.5 rounded text-xs font-medium
+                        {% if m.status == 'available' %}bg-success-50 text-success-600
+                        {% elif m.status == 'in_use' %}bg-primary-50 text-primary-600
+                        {% elif m.status == 'booked' %}bg-warning-50 text-warning-600
+                        {% else %}bg-gray-100 text-gray-500{% endif %}">
+                        {{ m.status|replace('_', ' ')|title }}
+                    </span>
+                </div>
+                <p class="text-xs text-gray-500 mb-3">{{ m.type|title }} • {{ m.location }}</p>
+                <form method="post" action="/admin/machine/{{ m.id }}/maintenance" class="flex items-center gap-2">
+                    <input type="hidden" name="maintenance" value="{{ 'false' if m.status == 'maintenance' else 'true' }}">
+                    <button type="submit"
+                            class="flex-1 py-2 text-xs rounded-lg font-medium transition-colors
+                                {% if m.status == 'maintenance' %}bg-gray-100 text-gray-700 hover:bg-gray-200
+                                {% else %}bg-danger-50 text-danger-600 hover:bg-danger-100{% endif %}">
+                        {% if m.status == 'maintenance' %}✅ Return to Service{% else %}🔧 Maintenance{% endif %}
+                    </button>
+                </form>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <!-- Today's Bookings -->
+    <section class="mb-8">
+        <div class="flex items-center justify-between mb-3">
+            <h2 class="text-lg font-semibold flex items-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                </svg>
+                Today's Bookings
+            </h2>
+            <span class="text-xs text-gray-500">{{ bookings|length }} bookings</span>
+        </div>
+        {% if bookings %}
+        <div class="overflow-x-auto bg-white rounded-xl shadow-sm border border-gray-100">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50 border-b border-gray-100">
+                    <tr>
+                        <th class="px-4 py-3 text-left font-medium text-gray-500">Booking ID</th>
+                        <th class="px-4 py-3 text-left font-medium text-gray-500">Machine</th>
+                        <th class="px-4 py-3 text-left font-medium text-gray-500">Customer</th>
+                        <th class="px-4 py-3 text-left font-medium text-gray-500">Start</th>
+                        <th class="px-4 py-3 text-left font-medium text-gray-500">Duration</th>
+                        <th class="px-4 py-3 text-left font-medium text-gray-500">Status</th>
+                        <th class="px-4 py-3 text-left font-medium text-gray-500">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    {% for b in bookings %}
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-4 py-3 font-mono text-xs">{{ b.id }}</td>
+                        <td class="px-4 py-3">{{ b.machine }}</td>
+                        <td class="px-4 py-3">{{ b.customer }}</td>
+                        <td class="px-4 py-3">{{ b.start }}</td>
+                        <td class="px-4 py-3">{{ b.duration }} min</td>
+                        <td class="px-4 py-3">
+                            <span class="px-2 py-0.5 rounded text-xs font-medium
+                                {% if b.status == 'confirmed' %}bg-warning-50 text-warning-600
+                                {% elif b.status == 'in_progress' %}bg-primary-50 text-primary-600
+                                {% elif b.status == 'completed' %}bg-success-50 text-success-600
+                                {% elif b.status == 'cancelled' %}bg-gray-100 text-gray-500
+                                {% else %}bg-danger-50 text-danger-600{% endif %}">
+                                {{ b.status|replace('_', ' ')|title }}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 space-x-1">
+                            {% if b.status == 'confirmed' %}
+                            <form method="post" action="/admin/booking/{{ b.id }}/complete" class="inline">
+                                <button type="submit" class="text-xs text-primary-600 hover:underline">Complete</button>
+                            </form>
+                            <form method="post" action="/admin/booking/{{ b.id }}/cancel" class="inline" onsubmit="return confirm('Cancel this booking?')">
+                                <button type="submit" class="text-xs text-danger-600 hover:underline">Cancel</button>
+                            </form>
+                            {% elif b.status == 'in_progress' %}
+                            <form method="post" action="/admin/booking/{{ b.id }}/complete" class="inline">
+                                <button type="submit" class="text-xs text-success-600 hover:underline font-medium">Complete</button>
+                            </form>
+                            {% else %}
+                            <span class="text-xs text-gray-400">—</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="bg-white rounded-xl p-8 shadow-sm border border-gray-100 text-center text-gray-500">
+            No bookings today.
+        </div>
+        {% endif %}
+    </section>
+
+    <!-- Waitlist -->
+    <section>
+        <h2 class="text-lg font-semibold mb-3 flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
+            </svg>
+            Waitlist ({{ waitlist|length }})
+        </h2>
+        {% if waitlist %}
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 divide-y divide-gray-100">
+            {% for w in waitlist %}
+            <div class="px-4 py-3 flex items-center justify-between hover:bg-gray-50">
+                <div>
+                    <p class="font-medium">{{ w.name }}</p>
+                    <p class="text-xs text-gray-500">{{ w.phone }} • {{ w.type|title }} • #{{ loop.index }}</p>
+                </div>
+                <span class="px-2 py-1 rounded text-xs
+                    {% if w.notified %}bg-blue-50 text-blue-600{% else %}bg-warning-50 text-warning-600{% endif %}">
+                    {% if w.notified %}Notified{% else %}Waiting{% endif %}
+                </span>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="bg-white rounded-xl p-8 shadow-sm border border-gray-100 text-center text-gray-500">
+            No one on the waitlist.
+        </div>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

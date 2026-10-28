@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Booking Status - FreshSpin{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto">
+    <!-- Status Header -->
+    <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-100 mb-4">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <h1 class="text-xl font-bold text-gray-900">{{ booking.machine_id }}</h1>
+                <p class="text-sm text-gray-500">{{ booking.machine_type|title }} • {{ booking.customer_name }}</p>
+            </div>
+            <span class="px-3 py-1 rounded-full text-xs font-medium
+                {% if booking.status == 'confirmed' %}bg-warning-50 text-warning-600
+                {% elif booking.status == 'in_progress' %}bg-primary-50 text-primary-600
+                {% elif booking.status == 'completed' %}bg-success-50 text-success-600
+                {% elif booking.status == 'cancelled' %}bg-gray-100 text-gray-500
+                {% else %}bg-danger-50 text-danger-600{% endif %}">
+                {{ booking.status|replace('_', ' ')|title }}
+            </span>
+        </div>
+
+        <!-- Time info -->
+        <div class="grid grid-cols-2 gap-4 text-center">
+            <div class="p-3 bg-gray-50 rounded-lg">
+                <div class="text-xs text-gray-500">Start</div>
+                <div class="font-medium">{{ booking.start }}</div>
+            </div>
+            <div class="p-3 bg-gray-50 rounded-lg">
+                <div class="text-xs text-gray-500">Est. End</div>
+                <div class="font-medium">{{ booking.end }}</div>
+            </div>
+        </div>
+
+        {% if booking.time_until %}
+        <div class="mt-3 p-3 bg-primary-50 rounded-lg text-center text-primary-700 text-sm">
+            Starts in: {{ booking.time_until }}
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Check-in QR (only for confirmed/in_progress) -->
+    {% if booking.status in ['confirmed', 'in_progress'] %}
+    <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-100 mb-4">
+        <h3 class="font-medium text-gray-900 mb-3 text-center">
+            {% if booking.status == 'confirmed' %}Scan to Start Cycle{% else %}Cycle Running{% endif %}
+        </h3>
+        <div class="flex justify-center mb-3">
+            {% if booking.qr_base64 %}
+            <img src="{{ booking.qr_base64 }}" alt="Check-in QR" class="w-40 h-40 rounded-lg border border-gray-200">
+            {% endif %}
+        </div>
+        {% if booking.status == 'confirmed' %}
+        <form method="post" action="/checkin/{{ booking.id }}" class="space-y-3">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Enter 4-Digit Code</label>
+                <input type="text" name="code" maxlength="4" pattern="[0-9]{4}" required
+                       class="w-full px-4 py-3 text-center text-2xl tracking-widest border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                       placeholder="1234" autocomplete="one-time-code" inputmode="numeric">
+            </div>
+            <button type="submit"
+                    class="w-full py-3 bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700">
+                Start Cycle
+            </button>
+        </form>
+        <p class="text-xs text-gray-500 mt-2 text-center">Code: <strong>{{ booking.code }}</strong></p>
+        {% else %}
+        <div class="text-center text-success-600 font-medium">
+            <svg class="w-6 h-6 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            Cycle in progress — estimated done {{ booking.end }}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Completed / Cancelled -->
+    {% if booking.status in ['completed', 'cancelled', 'no_show'] %}
+    <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-100 mb-4 text-center">
+        {% if booking.status == 'completed' %}
+        <svg class="w-16 h-16 mx-auto text-success-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+        </svg>
+        <h3 class="text-lg font-semibold text-success-600">Cycle Complete</h3>
+        <p class="text-gray-500 mt-1">Please collect your laundry from {{ booking.machine_id }}.</p>
+        {% elif booking.status == 'cancelled' %}
+        <svg class="w-16 h-16 mx-auto text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+        <h3 class="text-lg font-semibold text-gray-600">Booking Cancelled</h3>
+        {% else %}
+        <svg class="w-16 h-16 mx-auto text-danger-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+        </svg>
+        <h3 class="text-lg font-semibold text-danger-600">No Show</h3>
+        <p class="text-gray-500 mt-1">Booking expired — machine released for others.</p>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Actions -->
+    <div class="space-y-2">
+        <a href="/" class="block w-full text-center py-3 bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700">
+            Book Another Machine
+        </a>
+        <a href="/waitlist" class="block w-full text-center py-3 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50">
+            Join Waitlist
+        </a>
+    </div>
+</div>
+
+{% block scripts %}
+{{ super() }}
+<script>
+    // Auto-refresh status every 30 seconds if in progress
+    {% if booking.status == 'in_progress' %}
+    setInterval(() => location.reload(), 30000);
+    {% endif %}
+</script>
+{% endblock %}
+{% endblock %}

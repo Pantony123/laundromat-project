@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Book {{ machine.id }} - FreshSpin{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto">
+    <!-- Machine info card -->
+    <div class="bg-white rounded-xl p-4 shadow-sm border border-gray-100 mb-4">
+        <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-3">
+                <div class="w-12 h-12 rounded-lg bg-primary-100 flex items-center justify-center">
+                    {% if machine.type == 'washer' %}
+                    <svg class="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m-6-8v8"/>
+                    </svg>
+                    {% else %}
+                    <svg class="w-6 h-6 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                    {% endif %}
+                </div>
+                <div>
+                    <h3 class="font-semibold text-gray-900">{{ machine.id }} ({{ machine.type|title }})</h3>
+                    <p class="text-xs text-gray-500">{{ machine.location }}</p>
+                </div>
+            </div>
+            {% if machine.qr_base64 %}
+            <img src="{{ machine.qr_base64 }}" alt="QR" class="w-16 h-16 rounded-lg border border-gray-200">
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Upcoming bookings hint -->
+    {% if upcoming %}
+    <div class="bg-warning-50 border border-warning-200 rounded-lg p-3 mb-4">
+        <p class="text-sm text-warning-800 font-medium mb-1">Upcoming bookings:</p>
+        <div class="space-y-1 text-xs text-warning-700">
+            {% for b in upcoming %}
+            <div>{{ b.start }} - {{ b.duration }} min</div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Booking Form -->
+    <form method="post" action="/book/{{ machine.id }}" class="bg-white rounded-xl p-5 shadow-sm border border-gray-100 space-y-5" id="bookingForm">
+        <h2 class="text-lg font-semibold text-gray-900">New Booking</h2>
+
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Your Name</label>
+            <input type="text" name="customer_name" required
+                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                   placeholder="John Doe" autocomplete="name">
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+            <input type="tel" name="customer_phone" required
+                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                   placeholder="(555) 123-4567" autocomplete="tel"
+                   pattern="[0-9\s\-\(\)]{10,}" title="Enter a valid phone number">
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
+                <input type="datetime-local" name="start_time" required
+                       class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                       min="{{ default_start }}" max="{{ default_end }}">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Duration (min)</label>
+                <select name="duration_minutes" required
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent bg-white">
+                    <option value="30">30 minutes</option>
+                    <option value="45" selected>45 minutes</option>
+                    <option value="60">60 minutes</option>
+                    <option value="75">75 minutes</option>
+                    <option value="90">90 minutes</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="bg-gray-50 rounded-lg p-3 text-xs text-gray-600">
+            <p>📱 You'll receive an SMS confirmation with a 4-digit code.</p>
+            <p class="mt-1">🔑 Scan the QR code on the machine and enter the code to start your cycle.</p>
+        </div>
+
+        <button type="submit"
+                class="w-full py-3 bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700 active:bg-primary-800 transition-colors text-lg">
+            Confirm Booking
+        </button>
+    </form>
+
+    <div class="text-center mt-4">
+        <a href="/" class="text-sm text-gray-500 hover:text-primary-600">← Back to machines</a>
+    </div>
+</div>
+{% endblock %}

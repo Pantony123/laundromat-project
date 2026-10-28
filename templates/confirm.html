@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Booking Confirmed - FreshSpin{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto text-center">
+    <!-- Success animation -->
+    <div class="w-20 h-20 mx-auto mb-4 bg-success-100 rounded-full flex items-center justify-center animate-bounce">
+        <svg class="w-10 h-10 text-success-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/>
+        </svg>
+    </div>
+
+    <h1 class="text-2xl font-bold text-gray-900 mb-1">Booking Confirmed!</h1>
+    <p class="text-gray-500 mb-6">Your machine is reserved.</p>
+
+    <!-- Booking Details Card -->
+    <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-100 mb-4 text-left">
+        <div class="flex items-center justify-between mb-4 p-3 bg-gray-50 rounded-lg">
+            <span class="text-sm text-gray-500">Booking ID</span>
+            <code class="font-mono text-sm text-gray-900">{{ booking.id }}</code>
+        </div>
+
+        <div class="space-y-3">
+            <div class="flex justify-between">
+                <span class="text-gray-500">Machine</span>
+                <span class="font-medium">{{ booking.machine_id }} ({{ booking.machine_type|title }})</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-gray-500">Start Time</span>
+                <span class="font-medium">{{ booking.start }}</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-gray-500">Duration</span>
+                <span class="font-medium">{{ booking.duration }} minutes</span>
+            </div>
+            <div class="flex justify-between border-t border-gray-100 pt-3">
+                <span class="text-gray-500">Check-in Code</span>
+                <span class="font-mono text-lg font-bold text-primary-600 tracking-widest">{{ booking.code }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Check-in QR Code -->
+    <div class="bg-white rounded-xl p-5 shadow-sm border border-gray-100 mb-4">
+        <h3 class="font-medium text-gray-900 mb-3 text-center">Scan to Start Cycle</h3>
+        <div class="flex justify-center">
+            {% if booking.qr_base64 %}
+            <img src="{{ booking.qr_base64 }}" alt="Check-in QR" class="w-40 h-40 rounded-lg border border-gray-200">
+            {% endif %}
+        </div>
+        <p class="text-xs text-gray-500 mt-3 text-center">
+            1. Go to machine <strong>{{ booking.machine_id }}</strong><br>
+            2. Scan this QR code<br>
+            3. Enter code <strong>{{ booking.code }}</strong>
+        </p>
+    </div>
+
+    <!-- Status link -->
+    <a href="/status/{{ booking.id }}" class="inline-block w-full py-3 bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700 mb-3">
+        Track Status →
+    </a>
+
+    <div class="text-sm text-gray-500 space-y-1">
+        <p>📱 SMS confirmation sent to your phone</p>
+        <p>⏰ Reminder will arrive 10 min before start</p>
+        <a href="/" class="text-primary-600 hover:underline">← Book another machine</a>
+    </div>
+</div>
+
+{% block scripts %}
+{{ super() }}
+<script>
+    // Add to home screen prompt (iOS)
+    if (navigator.standalone === false && /iPhone|iPad|iPod/.test(navigator.userAgent)) {
+        setTimeout(() => {
+            const el = document.createElement('div');
+            el.className = 'fixed bottom-4 left-4 right-4 md:max-w-md mx-auto bg-white rounded-xl shadow-xl border p-4 z-50 animate-slide-up';
+            el.innerHTML = `
+                <p class="text-sm text-gray-700 mb-3">Tap <svg class="w-5 h-5 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg> Share → "Add to Home Screen" for quick access</p>
+                <button onclick="this.parentElement.remove()" class="text-xs text-gray-400 hover:text-gray-600">Dismiss</button>
+            `;
+            document.body.appendChild(el);
+        }, 2000);
+    }
+</script>
+<style>
+@keyframes slide-up { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+.animate-slide-up { animation: slide-up 0.3s ease-out; }
+</style>
+{% endblock %}
+{% endblock %}

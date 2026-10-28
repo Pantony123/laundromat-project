@@ -1,0 +1,17 @@
+# Railway deployment config
+# Deploy: connect this repo at railway.app → New Project → Deploy from GitHub
+
+[build]
+builder = "nixpacks"
+buildCommand = "pip install -r requirements.txt"
+
+[deploy]
+startCommand = "uvicorn customer_portal:app --host 0.0.0.0 --port $PORT"
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+# Optional: add these environment variables in Railway dashboard
+# DATABASE_URL = (auto-provided by Railway PostgreSQL plugin)
+# BASE_URL = https://your-app.up.railway.app

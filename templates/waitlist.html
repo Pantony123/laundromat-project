@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Join Waitlist - FreshSpin{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto text-center">
+    <div class="w-16 h-16 mx-auto mb-4 bg-primary-100 rounded-full flex items-center justify-center">
+        <svg class="w-8 h-8 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        </svg>
+    </div>
+
+    <h1 class="text-2xl font-bold text-gray-900 mb-2">Join the Waitlist</h1>
+    <p class="text-gray-500 mb-6">All machines busy? We'll text you when one becomes available.</p>
+
+    <form method="post" action="/waitlist" class="bg-white rounded-xl p-5 shadow-sm border border-gray-100 space-y-5 text-left">
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">What do you need?</label>
+            <div class="grid grid-cols-2 gap-3">
+                {% for mt in machine_types %}
+                <label class="relative cursor-pointer">
+                    <input type="radio" name="machine_type" value="{{ mt }}" required
+                           class="sr-only peer" {% if loop.first %}checked{% endif %}>
+                    <div class="p-4 rounded-lg border-2 text-center
+                        peer-checked:border-primary-500 peer-checked:bg-primary-50
+                        border-gray-200 hover:border-primary-300 transition-colors">
+                        <div class="w-10 h-10 mx-auto mb-2 rounded-lg
+                            {% if mt == 'washer' %}bg-blue-100{% else %}bg-orange-100{% endif %}
+                            flex items-center justify-center">
+                            {% if mt == 'washer' %}
+                            <svg class="w-5 h-5 {% if mt == 'washer' %}text-blue-600{% else %}text-orange-500{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V8z"/>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m-6-8v8"/>
+                            </svg>
+                            {% else %}
+                            <svg class="w-5 h-5 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                            </svg>
+                            {% endif %}
+                        </div>
+                        <span class="font-medium {% if mt == 'washer' %}text-blue-600{% else %}text-orange-600{% endif %}">{{ mt|title }}</span>
+                    </div>
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Your Name</label>
+            <input type="text" name="customer_name" required
+                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                   placeholder="Jane Smith" autocomplete="name">
+        </div>
+
+        <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
+            <input type="tel" name="customer_phone" required
+                   class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                   placeholder="(555) 123-4567" autocomplete="tel">
+        </div>
+
+        <button type="submit"
+                class="w-full py-3 bg-primary-600 text-white font-semibold rounded-lg hover:bg-primary-700 text-lg">
+            Join Waitlist
+        </button>
+    </form>
+
+    <p class="mt-4 text-xs text-gray-500 text-center">
+        We'll send an SMS when a {{ machine_types[0] }} or {{ machine_types[1] }} opens up.
+        <br>Standard messaging rates apply.
+    </p>
+
+    <div class="mt-4">
+        <a href="/" class="text-sm text-gray-500 hover:text-primary-600">← Back to machines</a>
+    </div>
+</div>
+{% endblock %}

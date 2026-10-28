@@ -6,7 +6,7 @@ Run: uvicorn customer_portal:app --reload --port 8000
 """
 
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -219,7 +219,8 @@ async def create_booking(
     except ValueError:
         raise HTTPException(400, "Invalid date/time format")
 
-    if start_dt < datetime.now():
+    # Compare with UTC now (browser sends local time, server is UTC)
+    if start_dt < datetime.now(timezone.utc).replace(tzinfo=None):
         raise HTTPException(400, "Start time cannot be in the past")
 
     if duration_minutes < 15 or duration_minutes > 180:

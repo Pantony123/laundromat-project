@@ -7,8 +7,11 @@ Run: uvicorn customer_portal:app --reload --port 8000
 
 import secrets
 from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Optional
+
+BRUSSELS_TZ = ZoneInfo("Europe/Brussels")
 
 from fastapi import FastAPI, Request, Form, HTTPException, Query, Depends, Cookie, Response
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
@@ -131,7 +134,7 @@ def require_any_auth(request: Request, session: Optional[str] = Cookie(None)) ->
 # ===== HELPER FUNCTIONS =====
 def get_available_machines(mtype: Optional[MachineType] = None):
     """Get machines available for booking right now (next 2 hours)."""
-    now = datetime.now()
+    now = datetime.now(BRUSSELS_TZ)
     soon = now + timedelta(hours=2)
     machines = system.list_machines(mtype)
     result = []
@@ -172,8 +175,8 @@ async def home(request: Request, user: Optional[dict] = Depends(require_any_auth
         "washers": washers,
         "dryers": dryers,
         "stats": stats,
-        "now": format_datetime_input(datetime.now()),
-        "soon": format_datetime_input(datetime.now() + timedelta(hours=2)),
+        "now": format_datetime_input(datetime.now(BRUSSELS_TZ)),
+        "soon": format_datetime_input(datetime.now(BRUSSELS_TZ) + timedelta(hours=2)),
         "user": user,
     })
 
@@ -185,7 +188,7 @@ async def book_page(request: Request, machine_id: str, user: Optional[dict] = De
         raise HTTPException(404, "Machine not found")
 
     # Check availability for next few hours
-    now = datetime.now()
+    now = datetime.now(BRUSSELS_TZ)
     bookings = system.list_bookings(machine_id=machine_id)
     upcoming = [b for b in bookings if b.status == BookingStatus.CONFIRMED.value and b.start_dt >= now]
 
@@ -219,8 +222,8 @@ async def create_booking(
     except ValueError:
         raise HTTPException(400, "Invalid date/time format")
 
-    # Compare with UTC now (browser sends local time, server is UTC)
-    if start_dt < datetime.now(timezone.utc).replace(tzinfo=None):
+    # Compare with Brussels time (browser sends local Brussels time)
+    if start_dt < datetime.now(BRUSSELS_TZ).replace(tzinfo=None):
         raise HTTPException(400, "Start time cannot be in the past")
 
     if duration_minutes < 15 or duration_minutes > 180:
@@ -270,7 +273,7 @@ async def booking_status(request: Request, booking_id: str, user: Optional[dict]
     machine = system.get_machine(booking.machine_id)
     time_until = ""
     if booking.status == BookingStatus.CONFIRMED.value:
-        delta = booking.start_dt - datetime.now()
+        delta = booking.start_dt - datetime.now(BRUSSELS_TZ)
         if delta.total_seconds() > 0:
             mins = int(delta.total_seconds() / 60)
             time_until = f"{mins} min" if mins < 60 else f"{mins//60}h {mins%60}m"
@@ -448,7 +451,7 @@ async def admin_dashboard(request: Request, user: dict = Depends(require_admin))
     """Staff admin dashboard - requires authentication."""
     stats = system.get_stats()
     machines = system.list_machines()
-    bookings_today = system.list_bookings(date=datetime.now())
+    bookings_today = system.list_bookings(date=datetime.now(BRUSSELS_TZ))
     waitlist = system.get_waitlist()
 
     return templates.TemplateResponse(request, "admin.html", {
